@@ -1,41 +1,37 @@
 import streamlit as st
 import pandas as pd
-import mysql.connector
+import mysql.connector as mycon
 
 st.set_page_config(page_title='Forum', page_icon=':speech_balloon:', layout='wide')
 
 #connect to mysql
-connection = mysql.connector.connect(
-    host="localhost",
-    user="your_username",
-    password="your_password",
-    database="forum_db"
-)
+con=mycon.connect(host='localhost',user='root',passwd='isradps1234',database='vitalities')
 
-#create table
-create_table_query = """
-CREATE TABLE IF NOT EXISTS posts (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user VARCHAR(255),
-    post TEXT,
-    replies TEXT,
-    points INT DEFAULT 0
-)
-"""
-with connection.cursor() as cursor:
-    cursor.execute(create_table_query)
+cur=con.cursor()
+query = "SELECT * FROM forum"
+cur.execute(query)
+posts = cur.fetchall()
+    
+#add post
+count=len(posts)+1
 
 #display posts replies
-def display_posts(posts):
-    for i, post in enumerate(posts):
-        st.write(f"Post #{i + 1}: {post['user']} (Points: {post['points']}) - {post['post']}")
-        st.write("Replies:")
-        replies = post["replies"]
-        if replies:
-            for reply in replies:
-                st.write(reply)
+def display_replies(post_number,reply):
+    global count
+    if reply:
+        if post_number > 0 and post_number <= len(posts):
+            
+            update_reply_query = "UPDATE forum SET replies = CONCAT(IFNULL(replies, ''), %s) WHERE postnum = %s"
+    
+            cur.execute(update_reply_query, (reply+'\n', post_number))
+            con.commit()
+            st.success("Reply added successfully!")
         else:
-            st.write("No replies yet.")
+            st.warning("Invalid post number!")
+    else:
+        st.warning("Reply content is empty!")
+    
+    st.experimental_rerun()
 
 #main function
 def main():
@@ -45,43 +41,67 @@ def main():
     st.subheader("Create a new post")
     user = st.text_input("Enter your name")
     new_post = st.text_area("Enter your post")
+
+    
+    
+    
+    global count
     if st.button("Submit"):
         if user and new_post:
-            insert_post_query = "INSERT INTO posts (user, post) VALUES (%s, %s)"
-            with connection.cursor() as cursor:
-                cursor.execute(insert_post_query, (user, new_post))
-                connection.commit()
+            query = "INSERT INTO forum (name, post,postnum) VALUES (%s, %s,%s)"
+            cur.execute(query, (user, new_post,count))
+            con.commit()
+            
             st.success("Post created successfully!")
+        else:
+            st.warning("Please enter your name and post content!")
 
     #display existing posts
-    st.subheader("Existing Posts")
-    with connection.cursor(dictionary=True) as cursor:
-        cursor.execute("SELECT * FROM posts")
-        posts = cursor.fetchall()
-        display_posts(posts)
+    st.header("Existing Posts")
+    col1,col2,col3=st.columns([0.6,0.05,0.35])
+    
+      
+    
+    
+    
+    with col1:
+        
+        query = "SELECT * FROM forum"
+        cur.execute(query)
+        posts = cur.fetchall()
 
-    #reply func
-    st.subheader("Reply to a post")
-    with connection.cursor(dictionary=True) as cursor:
-        cursor.execute("SELECT * FROM posts")
-        posts = cursor.fetchall()
-        if posts:
-            post_number = st.number_input("Enter the post number", min_value=1, max_value=len(posts), value=1)
-            reply = st.text_area("Enter your reply")
-            if st.button("Reply"):
-                if reply:
-                    if post_number > 0 and post_number <= len(posts):
-                        post_id = posts[post_number - 1]["id"]
-                        update_reply_query = "UPDATE posts SET replies = CONCAT(IFNULL(replies, ''), %s) WHERE id = %s"
-                        with connection.cursor() as cursor:
-                            cursor.execute(update_reply_query, (f"\n{reply}\n", post_id))
-                            connection.commit()
-                        st.success("Reply added successfully!")
-                    else:
-                        st.warning("Invalid post number!")
-                else:
-                    st.warning("Reply content is empty!")
-            else:
-                st.warning("No reply content provided!")
-        else:
-            st.warning("No posts available!")
+        for i in posts:
+            col1,col2=st.columns([1,1])
+            with col1:
+                try:
+                    num_replies = i[4].count("\n")
+                except:
+                    num_replies = 0
+                st.subheader(f"Post #{i[3]},{num_replies}")
+                st.write(i[1])
+            with col2:
+                st.subheader("Replies:")
+                try:
+                    string=i[4].split("\n")
+                    for j in string:
+                        st.write(j)
+                except:
+                    st.write("No replies yet!")
+                
+        
+        
+        
+    with col2:
+        st.write(" ")
+    with col3:
+        post_number = st.number_input("Enter the post number", min_value=1, max_value=len(posts), value=1)
+        reply = st.text_area("Enter your reply")
+        if st.button("Reply"):
+            display_replies(post_number,reply)
+
+    
+
+
+
+
+main()
